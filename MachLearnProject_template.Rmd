@@ -1,0 +1,87 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+# Prediction Model for Weight Lifting Exercises Quality
+
+This work is done as a part of course project for "Practical Machine Learning" course at Coursera. The goal of the assignment is to build prediction model for exercise from "Weight Lifting Exercises" dataset (available at http://groupware.les.inf.puc-rio.br/har). 
+
+## Loading Data
+Load libraries that will be used for prediction models:
+
+```{r, results='hide'}
+library(caret)
+library(randomForest)
+
+# Ensure reproducibility
+set.seed(201502)
+```
+
+Load data and make sure missing values are marked properly as N/A:
+
+```{r}
+# List of missing values 
+naStrings = c("", "NA", "#DIV/0!")
+dataset = read.csv("pml-training.csv", header = TRUE, na.strings = naStrings)
+validation = read.csv("pml-testing.csv", header = TRUE, na.strings = naStrings)
+```
+
+Checking summmary of loaded training data we see that there are many N/A values there. In order to clean them, we will remove column that contain more than a half of N/A values. In addition first 7 columns are removed, since they represent personal data and can be inadvertently picked by prediction model which could lead to overfitting: 
+
+```{r}
+threshold = dim(dataset)[1] / 2
+cleanDataset = dataset[, apply(dataset, 2, function(x) sum(is.na(x)) < threshold)]
+removeColumns = 1:7
+cleanDataset = cleanDataset[, -removeColumns]
+
+cat('Number of columns in raw training data: ', dim(dataset)[2])
+cat('Number of columns in cleaned training data: ', dim(cleanDataset)[2])
+rm(dataset)
+```
+
+## Create Training and Testing Datasets
+
+To train the prediction model we will split the training data into training and testing subsets:
+
+```{r}
+inTraining = createDataPartition(y = cleanDataset$classe, p = 0.7, list = FALSE)
+training = cleanDataset[inTraining, ]
+testing = cleanDataset[-inTraining, ]
+```
+
+## Building the Prediction Model
+
+We will try to build prediction model using Random Forests (method "rf" in train() function, but via randomForest() function for performance reasons):
+
+```{r}
+modFit = randomForest(classe ~ ., data = training)
+modFit
+```
+
+Model shows very low error rate estiamate. We will check the model by comparing prediction results in testing dataset:
+
+```{r}
+pred = predict(modFit, testing)
+confusionMatrix(pred, testing$classe)
+```
+
+The above test might not be necessary, as in "Random Forests" by Leo Breiman and Adele Cutler (availabe at http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr) authors state that test error is estimated internally, and therefore there is no need for cross-validation.
+
+## Submission Results
+
+For completing submission part of the project we will create solution files, one per each answer:
+
+```{r}
+submission = predict(modFit, validation)
+
+write_files = function(x) {
+    n = length(x)
+    for(i in 1:n) {
+        filename = sprintf("problem_%02i.txt", i)
+        write.table(x[i], file = filename, 
+                    quote = FALSE, row.names = FALSE, col.names = FALSE)
+    }
+}
+write_files(submission)
+```
